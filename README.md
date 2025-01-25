@@ -19,7 +19,7 @@ $ source /opt/ros/galactic/setup.bash
 $ mkdir -p ~/ros2_ws/src
 $ cd ~/ros2_ws/src
 $ git clone https://github.com/paagutie/dvl_msgs.git
-$ git clone --recurse-submodules https://github.com/paagutie/dvl-a50.git
+$ git clone --recurse-submodules https://github.com/gt-marine-robotics-group/dvl-a50.git
 $ cd ..
 $ colcon build
 ```
