@@ -34,12 +34,23 @@ old_altitude(0.0)
     dvl_sub_config_command = this->create_subscription<dvl_msgs::msg::ConfigCommand>("dvl/config/command", qos, std::bind(&DVL_A50::command_subscriber, this, _1));
 
     this->declare_parameter<std::string>("dvl_ip_address", "192.168.1.210");
+    this->declare_parameter<int>("speed_of_sound", 1475);
+    this->declare_parameter<std::string>("range_mode", "0<=1");
+    this->declare_parameter<bool>("periodic_cycling_enabled", true);
+    this->declare_parameter<std::string>("odometry_frame_id", "dvl_a50_link");
+
     this->declare_parameter<std::string>("velocity_frame_id", "dvl_A50/velocity_link");
     this->declare_parameter<std::string>("position_frame_id", "dvl_A50/position_link");
     
     velocity_frame_id = this->get_parameter("velocity_frame_id").as_string();
     position_frame_id = this->get_parameter("position_frame_id").as_string();
+
     ip_address = this->get_parameter("dvl_ip_address").as_string();
+    int speed_of_sound_param = this->get_parameter("speed_of_sound").as_int();
+    std::string range_mode_param = this->get_parameter("range_mode").as_string();
+    bool periodic_cycling_enabled_param = this->get_parameter("periodic_cycling_enabled").as_bool();
+    odometry_frame_id_param = this->get_parameter("odometry_frame_id").as_string();
+
     RCLCPP_INFO(get_logger(), "IP_ADDRESS: '%s'", ip_address.c_str());
 
     //--- TCP/IP SOCKET ---- 
@@ -86,9 +97,9 @@ old_altitude(0.0)
     else
         RCLCPP_INFO(get_logger(), "DVL-A50 connected!");
     
-    /*
-     * Disable transducer operation to limit sensor heating out of water.
-     */
+    this->set_json_parameter("speed_of_sound", std::to_string(speed_of_sound_param));
+    this->set_json_parameter("range_mode", range_mode_param);
+    this->set_json_parameter("periodic_cycling_enabled", std::to_string(periodic_cycling_enabled_param));
     this->set_json_parameter("acoustic_enabled", "true");
     usleep(2000);
 
@@ -278,7 +289,7 @@ void DVL_A50::publish_odometry_report()
     // Calculate dead reckoning
     nav_msgs::msg::Odometry dvl_odometry;
     dvl_odometry.header.stamp = Node::now();
-    dvl_odometry.header.frame_id = "dvl_a50_link";
+    dvl_odometry.header.frame_id = odometry_frame_id_param;
     dvl_odometry.pose = saved_position;
     dvl_odometry.twist = saved_velocity;
     // Publish data
@@ -309,6 +320,12 @@ void DVL_A50::publish_config_status()
     dvl_msgs::msg::ConfigStatus status_msg;
     status_msg.response_to = json_data["response_to"];
     status_msg.success = json_data["success"];
+    if (status_msg.success) {
+        RCLCPP_INFO(get_logger(), "Set Config: SUCCESS");
+    }
+    else {
+        RCLCPP_ERROR(get_logger(), "Set Config: FAILED");
+    }
     status_msg.error_message = json_data["error_message"];
     status_msg.speed_of_sound = json_data["result"]["speed_of_sound"];
     status_msg.acoustic_enabled = json_data["result"]["acoustic_enabled"];
@@ -361,7 +378,8 @@ DVL_Parameters DVL_A50::resolveParameter(std::string param)
 	    return mountig_rotation_offset;
 	else if(param == "range_mode")
 	    return range_mode;
-
+	else if(param == "periodic_cycling_enabled")
+	    return periodic_cycling_enabled;
 	return invalid_param;
 }
 
@@ -372,7 +390,7 @@ void DVL_A50::set_json_parameter(const std::string name, const std::string value
 {
     json message;
     message["command"] = "set_config";
-
+    RCLCPP_INFO(get_logger(), "Trying to set %s with config %s", name.c_str(), value.c_str());
     switch (resolveParameter(name))
     {
         case speed_of_sound:
@@ -431,6 +449,20 @@ void DVL_A50::set_json_parameter(const std::string name, const std::string value
             try
             {
                 message["parameters"]["range_mode"] = value;
+                this->send_parameter_to_sensor(message);
+            }
+            catch(const std::exception& e)
+            {
+                RCLCPP_ERROR(get_logger(), "Invalid data type! error: %s", e.what());
+            }
+            break;
+        
+        case periodic_cycling_enabled:
+            try
+            {
+                bool data;
+                std::istringstream(value) >> std::boolalpha >> data;
+                message["parameters"]["periodic_cycling_enabled"] = data;
                 this->send_parameter_to_sensor(message);
             }
             catch(const std::exception& e)

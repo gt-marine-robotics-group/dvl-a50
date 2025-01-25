@@ -46,6 +46,7 @@ enum DVL_Parameters {
     dark_mode_enabled,
     mountig_rotation_offset,
     range_mode,
+    periodic_cycling_enabled,
     invalid_param
 };
 
@@ -74,6 +75,7 @@ private:
     std::chrono::steady_clock::time_point first_time;
     std::chrono::steady_clock::time_point first_time_error;
     
+    std::string odometry_frame_id_param;
     rclcpp::TimerBase::SharedPtr timer_receive;
     rclcpp::TimerBase::SharedPtr timer_send;
     rclcpp::Publisher<dvl_msgs::msg::DVL>::SharedPtr dvl_pub_report;
