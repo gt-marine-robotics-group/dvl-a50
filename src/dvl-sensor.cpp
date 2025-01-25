@@ -6,6 +6,7 @@
  */
 
 #include "dvl_a50/dvl-sensor.hpp"
+#include <math.h>
 
 namespace dvl_sensor {
 
@@ -27,11 +28,12 @@ old_altitude(0.0)
     //Publishers
     dvl_pub_report = this->create_publisher<dvl_msgs::msg::DVL>("dvl/data", qos);
     dvl_pub_pos = this->create_publisher<dvl_msgs::msg::DVLDR>("dvl/position", qos);
+    dvl_pub_odometry = this->create_publisher<nav_msgs::msg::Odometry>("dvl/odometry", qos);
     dvl_pub_config_status = this->create_publisher<dvl_msgs::msg::ConfigStatus>("dvl/config/status", qos);
     dvl_pub_command_response = this->create_publisher<dvl_msgs::msg::CommandResponse>("dvl/command/response", qos);
     dvl_sub_config_command = this->create_subscription<dvl_msgs::msg::ConfigCommand>("dvl/config/command", qos, std::bind(&DVL_A50::command_subscriber, this, _1));
 
-    this->declare_parameter<std::string>("dvl_ip_address", "192.168.194.95");
+    this->declare_parameter<std::string>("dvl_ip_address", "192.168.1.210");
     this->declare_parameter<std::string>("velocity_frame_id", "dvl_A50/velocity_link");
     this->declare_parameter<std::string>("position_frame_id", "dvl_A50/position_link");
     
@@ -87,7 +89,7 @@ old_altitude(0.0)
     /*
      * Disable transducer operation to limit sensor heating out of water.
      */
-    this->set_json_parameter("acoustic_enabled", "false");
+    this->set_json_parameter("acoustic_enabled", "true");
     usleep(2000);
 
 }
@@ -119,9 +121,11 @@ void DVL_A50::handle_receive()
 
             if (json_data.contains("altitude")) {
                 this->publish_vel_trans_report();
+                this->publish_odometry_report();
             }
             else if (json_data.contains("pitch")) {
                 this->publish_dead_reckoning_report();
+                this->publish_odometry_report();
             }
             else if (json_data.contains("response_to"))
             {
@@ -203,6 +207,22 @@ void DVL_A50::publish_vel_trans_report()
 		    
     dvl.beams = {beam0, beam1, beam2, beam3};
     dvl_pub_report->publish(dvl);
+
+    geometry_msgs::msg::TwistWithCovariance velocity;
+    for (int row = 0; row < 6; row++){
+        for (int col = 0; col < 6; col++){
+            if (row < 3 && col < 3){
+                velocity.covariance[(row * 6) + col] = double(json_data["covariance"][row][col]);
+            }
+            else{
+                velocity.covariance[(row * 6) + col] = 0.0;
+            }
+        }
+    }
+    velocity.twist.linear.x = double(json_data["vx"]);
+    velocity.twist.linear.y = double(json_data["vy"]);
+    velocity.twist.linear.z = double(json_data["vz"]);
+    saved_velocity = velocity;
 }
 
 /*
@@ -226,7 +246,45 @@ void DVL_A50::publish_dead_reckoning_report()
     DVLDeadReckoning.status = json_data["status"];
     DVLDeadReckoning.format = json_data["format"];
     dvl_pub_pos->publish(DVLDeadReckoning);
+
+    geometry_msgs::msg::PoseWithCovariance position;
+    position.pose.position.x = double(json_data["x"]);
+    position.pose.position.y = double(json_data["y"]);
+    position.pose.position.z = double(json_data["z"]);
+    double roll = double(json_data["roll"]);
+    double pitch = double(json_data["pitch"]);
+    double yaw = double(json_data["yaw"]);
+    tf2::Quaternion q;
+    q.setRPY(roll * 3.14159 / 180, pitch * 3.14159 / 180, yaw * 3.14159 / 180);
+    position.pose.orientation.x = double(q.x());
+    position.pose.orientation.y = double(q.y());
+    position.pose.orientation.z = double(q.z());
+    position.pose.orientation.w = double(q.w());
+    for (int row = 0; row < 6; row++){
+        for (int col = 0; col < 6; col++){
+            if (row == col && row < 3){
+                position.covariance[(row * 6) + col] = double(json_data["std"]) * double(json_data["std"]);
+            }
+            else{
+                position.covariance[(row * 6) + col] = 0.0;
+            }
+        }
+    }
+    saved_position = position;
 }
+
+void DVL_A50::publish_odometry_report()
+{
+    // Calculate dead reckoning
+    nav_msgs::msg::Odometry dvl_odometry;
+    dvl_odometry.header.stamp = Node::now();
+    dvl_odometry.header.frame_id = "dvl_a50_link";
+    dvl_odometry.pose = saved_position;
+    dvl_odometry.twist = saved_velocity;
+    // Publish data
+    dvl_pub_odometry->publish(dvl_odometry);
+}
+
 
 /*
  * Publish the command response

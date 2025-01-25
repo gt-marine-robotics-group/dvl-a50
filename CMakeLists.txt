@@ -20,8 +20,11 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(dvl_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
@@ -35,6 +38,9 @@ include_directories(include
 )
 ament_python_install_package(scripts)
 
+include_directories(/opt/ros/humble/include/tf2_geometry_msgs)
+include_directories(/opt/ros/humble/include/tf2)
+include_directories(/opt/ros/humble/include/tf2_ros)
 
 # Talker Setup
 add_library(dvl_a50_component SHARED src/lifecycle_dvl_component.cpp)
@@ -55,7 +61,8 @@ set(node_plugins "${node_plugins}composition::LifecycleDVL;$<TARGET_FILE:dvl_a50
 add_executable(${PROJECT_NAME}_sensor src/dvl-sensor.cpp)
 ament_target_dependencies(${PROJECT_NAME}_sensor rclcpp 
     "sensor_msgs" 
-    "geometry_msgs" 
+    "geometry_msgs"
+    "nav_msgs"
     "dvl_msgs")
 
 

@@ -15,6 +15,11 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "dvl_a50/tcpsocket.hpp"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <geometry_msgs/msg/twist_with_covariance.hpp>
+#include <geometry_msgs/msg/pose_with_covariance.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+
 
 #include <string>
 #include "dvl_msgs/msg/dvl.hpp"
@@ -73,10 +78,13 @@ private:
     rclcpp::TimerBase::SharedPtr timer_send;
     rclcpp::Publisher<dvl_msgs::msg::DVL>::SharedPtr dvl_pub_report;
     rclcpp::Publisher<dvl_msgs::msg::DVLDR>::SharedPtr dvl_pub_pos;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr dvl_pub_odometry;
+
     rclcpp::Publisher<dvl_msgs::msg::CommandResponse>::SharedPtr dvl_pub_command_response;
     rclcpp::Publisher<dvl_msgs::msg::ConfigStatus>::SharedPtr dvl_pub_config_status;
     rclcpp::Subscription<dvl_msgs::msg::ConfigCommand>::SharedPtr dvl_sub_config_command;
-
+    geometry_msgs::msg::TwistWithCovariance saved_velocity;
+    geometry_msgs::msg::PoseWithCovariance saved_position;
 
     void handle_receive();
     //Publish velocity and transducer report
@@ -84,6 +92,7 @@ private:
     void publish_dead_reckoning_report();
     void publish_config_status();
     void publish_command_response();
+    void publish_odometry_report();
 
     void command_subscriber(const dvl_msgs::msg::ConfigCommand::SharedPtr msg);
     void set_json_parameter(const std::string name, const std::string value);
