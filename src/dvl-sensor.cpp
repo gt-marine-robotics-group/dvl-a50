@@ -98,9 +98,13 @@ old_altitude(0.0)
         RCLCPP_INFO(get_logger(), "DVL-A50 connected!");
     
     this->set_json_parameter("speed_of_sound", std::to_string(speed_of_sound_param));
+    this->handle_receive();
     this->set_json_parameter("range_mode", range_mode_param);
+    this->handle_receive();
     this->set_json_parameter("periodic_cycling_enabled", std::to_string(periodic_cycling_enabled_param));
+    this->handle_receive();
     this->set_json_parameter("acoustic_enabled", "true");
+    this->handle_receive();
     usleep(2000);
 
 }
@@ -305,6 +309,12 @@ void DVL_A50::publish_command_response()
     dvl_msgs::msg::CommandResponse command_resp;
     command_resp.response_to = json_data["response_to"];
     command_resp.success = json_data["success"];
+    if (command_resp.success) {
+        RCLCPP_INFO(get_logger(), "Set Config: SUCCESS");
+    }
+    else {
+        RCLCPP_ERROR(get_logger(), "Set Config: FAILED");
+    }
     command_resp.error_message = json_data["error_message"];
     command_resp.result = 0;
     command_resp.format = json_data["format"];
@@ -320,12 +330,6 @@ void DVL_A50::publish_config_status()
     dvl_msgs::msg::ConfigStatus status_msg;
     status_msg.response_to = json_data["response_to"];
     status_msg.success = json_data["success"];
-    if (status_msg.success) {
-        RCLCPP_INFO(get_logger(), "Set Config: SUCCESS");
-    }
-    else {
-        RCLCPP_ERROR(get_logger(), "Set Config: FAILED");
-    }
     status_msg.error_message = json_data["error_message"];
     status_msg.speed_of_sound = json_data["result"]["speed_of_sound"];
     status_msg.acoustic_enabled = json_data["result"]["acoustic_enabled"];
@@ -398,6 +402,7 @@ void DVL_A50::set_json_parameter(const std::string name, const std::string value
             {
                 message["parameters"]["speed_of_sound"] = (int)std::stoi(value);
                 this->send_parameter_to_sensor(message);
+                
             }
             catch(const std::exception& e)
             {
